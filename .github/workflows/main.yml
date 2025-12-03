@@ -17,27 +17,29 @@ jobs:
         with:
           haxe-version: 4.3.4
 
-      - name: Install Haxelib and Dependencies
+      - name: Install Haxelib & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libvlc-dev libvlccore-dev
+          sudo apt-get install libvlc-dev libvlccore-dev
           haxelib setup ~/haxelib
           haxelib install hxcpp > /dev/null --quiet
-          haxelib install hxvlc > /dev/null --quiet
           chmod +x ./setup/unix.sh
           sh ./setup/unix.sh
+
+      - name: Skip SScript setup mode
+        run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
 
       - name: Create Version Tag
         run: echo "${{ github.run_id }}" > VERSION
 
       - name: Compile
-        run: haxelib run lime build linux --app-version="4.0.0-${{ github.run_id }}" -D officialBuild -D VIDEOS_ALLOWED
+        run: haxelib run lime build linux -D hxcpp_64bit --app-version="4.0.0-${{ github.run_id}}" -D officialBuild
 
       - name: Publish Artifact
         uses: actions/upload-artifact@v4.3.4
         with:
           name: linuxBuild
-          path: 'export/release/linux/bin'
+          path: export/release/linux/bin
 
   buildWindows:
     runs-on: windows-latest
@@ -48,21 +50,22 @@ jobs:
         with:
           haxe-version: 4.3.4
 
-      - name: Install Haxelib and Dependencies
+      - name: Install Haxelib
         run: |
           haxelib setup C:/haxelib
-          haxelib install hxcpp > nul
-          haxelib install hxvlc > nul
-          .\setup\windows.bat
+          haxelib install hxcpp > /dev/null --quiet
+          .\"setup/windows.bat"
+        shell: cmd
+
+      - name: Skip SScript setup mode
+        run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> %USERPROFILE%/settings.cocoa
         shell: cmd
 
       - name: Create Version Tag
         run: echo "${{ github.run_id }}" > VERSION
-        shell: cmd
 
       - name: Compile
-        run: haxelib run lime build windows --32bits --app-version="4.0.0-${{ github.run_id }}" -D officialBuild
-        shell: cmd
+        run: haxelib run lime build windows -D hxcpp_64bit --app-version="4.0.0-${{ github.run_id}}" -D officialBuild
 
       - name: Publish Artifact
         uses: actions/upload-artifact@v4.3.4
@@ -79,20 +82,21 @@ jobs:
         with:
           haxe-version: 4.3.4
 
-      - name: Install Haxelib and Dependencies
+      - name: Install Haxelib & Dependencies
         run: |
-          brew install vlc
           haxelib setup ~/haxelib
           haxelib install hxcpp > /dev/null --quiet
-          haxelib install hxvlc > /dev/null --quiet
           chmod +x ./setup/unix.sh
           sh ./setup/unix.sh
+
+      - name: Skip SScript setup mode
+        run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
 
       - name: Create Version Tag
         run: echo "${{ github.run_id }}" > VERSION
 
       - name: Compile
-        run: haxelib run lime build mac --app-version="4.0.0-${{ github.run_id }}" -D officialBuild -D VIDEOS_ALLOWED
+        run: haxelib run lime build mac -D hxcpp_64bit --app-version="4.0.0-${{ github.run_id}}" -D officialBuild
 
       - name: Publish Artifact
         uses: actions/upload-artifact@v4.3.4
