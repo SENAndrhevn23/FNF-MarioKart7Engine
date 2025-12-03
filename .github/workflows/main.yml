@@ -17,7 +17,7 @@ jobs:
         with:
           haxe-version: 4.3.4
 
-      - name: Install Haxelib
+      - name: Install Haxelib and Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libvlc-dev libvlccore-dev
@@ -31,7 +31,7 @@ jobs:
         run: echo "${{ github.run_id }}" > VERSION
 
       - name: Compile
-        run: haxelib run lime build linux --64bits --app-version="4.0.0-${{ github.run_id }}" -D officialBuild
+        run: haxelib run lime build linux --app-version="4.0.0-${{ github.run_id }}" -D officialBuild -D VIDEOS_ALLOWED
 
       - name: Publish Artifact
         uses: actions/upload-artifact@v4.3.4
@@ -48,7 +48,7 @@ jobs:
         with:
           haxe-version: 4.3.4
 
-      - name: Install Haxelib
+      - name: Install Haxelib and Dependencies
         run: |
           haxelib setup C:/haxelib
           haxelib install hxcpp > nul
@@ -79,8 +79,9 @@ jobs:
         with:
           haxe-version: 4.3.4
 
-      - name: Install Haxelib
+      - name: Install Haxelib and Dependencies
         run: |
+          brew install vlc
           haxelib setup ~/haxelib
           haxelib install hxcpp > /dev/null --quiet
           haxelib install hxvlc > /dev/null --quiet
@@ -91,7 +92,7 @@ jobs:
         run: echo "${{ github.run_id }}" > VERSION
 
       - name: Compile
-        run: haxelib run lime build mac --64bits --app-version="4.0.0-${{ github.run_id }}" -D officialBuild
+        run: haxelib run lime build mac --app-version="4.0.0-${{ github.run_id }}" -D officialBuild -D VIDEOS_ALLOWED
 
       - name: Publish Artifact
         uses: actions/upload-artifact@v4.3.4
