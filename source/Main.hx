@@ -6,14 +6,11 @@ import android.content.Context;
 
 import debug.FPSCounter;
 
-import flixel.graphics.FlxGraphic;
 import flixel.FlxGame;
 import flixel.FlxState;
 import haxe.io.Path;
-import openfl.Assets;
 import openfl.Lib;
 import openfl.display.Sprite;
-import openfl.events.Event;
 import openfl.display.StageScaleMode;
 import lime.app.Application;
 import states.TitleState;
@@ -39,14 +36,8 @@ import haxe.io.Path;
 
 import backend.Highscore;
 
-#if (linux && !debug)
-@:cppInclude('./external/gamemode_client.h')
-@:cppFileCode('#define GAMEMODE_AUTO')
-#end
-
 #if VIDEOS_ALLOWED
-import hxvlc.util.Handle;
-import flixel.addons.ui.FlxVideo;
+import hxvlc.VLC;
 #end
 
 class Main extends Sprite
@@ -81,9 +72,7 @@ class Main extends Sprite
 		Sys.setCwd(lime.system.System.applicationStorageDirectory);
 		#end
 
-		// Initialize video handle if allowed
 		#if VIDEOS_ALLOWED
-		Handle.init(#if (hxvlc >= "1.8.0") ['--no-lua'] #end);
 		playStartupVideo();
 		#else
 		startEngine();
@@ -93,21 +82,20 @@ class Main extends Sprite
 	#if VIDEOS_ALLOWED
 	private function playStartupVideo():Void
 	{
-		var splash:FlxVideo = new FlxVideo();
-		splash.load("assets/videos/splash.ogv");
+		var splash = new VLC("assets/videos/splash.ogv");
 		splash.play();
 		addChild(splash);
 
+		// When video finishes, start engine
 		splash.onEndReached = function() {
 			removeChild(splash);
 			startEngine();
 		}
 
-		// Optional skip
-		FlxG.signals.gameResized.add(function(_, _) {});
-		stage.addEventListener(openfl.events.Event.ENTER_FRAME, function(_){
-			if(FlxG.keys.justPressed.SPACE || FlxG.keys.justPressed.ENTER)
-			{
+		// Optional: skip video with ENTER or SPACE
+		stage.addEventListener(openfl.events.Event.ENTER_FRAME, function(_) {
+			if (FlxG.keys.justPressed.ENTER || FlxG.keys.justPressed.SPACE) {
+				splash.stop();
 				removeChild(splash);
 				startEngine();
 			}
