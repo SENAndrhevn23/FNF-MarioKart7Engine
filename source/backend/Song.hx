@@ -3,7 +3,6 @@ package backend;
 import haxe.Json;
 import lime.utils.Assets;
 import objects.Note;
-import haxe.ds.IntMap;
 
 typedef SwagSong =
 {
@@ -64,9 +63,12 @@ class Song
 	public var gfVersion:String = 'gf';
 	public var format:String = 'psych_v1';
 
-	// Section cache for large charts
-	static var sectionCache:IntMap<SwagSection> = new IntMap();
-	static var MAX_CACHE:Int = 1000;
+	public static var chartPath:String;
+	public static var loadedSongName:String;
+
+	// Cache for large charts
+	public static var sectionCache:haxe.ds.IntMap<SwagSection> = new haxe.ds.IntMap();
+	public static var MAX_CACHE:Int = 1000;
 
 	public static function convert(songJson:Dynamic):Void
 	{
@@ -79,44 +81,42 @@ class Song
 		if(songJson.events == null)
 		{
 			songJson.events = [];
-			var sections:Array<SwagSection> = cast songJson.notes;
-			for(sec in sections)
+			for(secNum in 0...songJson.notes.length)
 			{
+				var sec:SwagSection = cast songJson.notes[secNum];
+
 				var i:Int = 0;
-				var notes:Array<Dynamic> = cast sec.sectionNotes;
-				while(i < notes.length)
+				var notes:Array<Dynamic> = sec.sectionNotes;
+				var len:Int = notes.length;
+				while(i < len)
 				{
 					var note:Array<Dynamic> = notes[i];
 					if(note[1] < 0)
 					{
 						songJson.events.push([note[0], [[note[2], note[3], note[4]]]]);
 						notes.remove(note);
+						len = notes.length;
 					}
 					else i++;
 				}
 			}
 		}
 
-		var sections:Array<SwagSection> = cast songJson.notes;
-		for(sec in sections)
+		for(section in cast songJson.notes)
 		{
-			if(sec.sectionBeats == null || Math.isNaN(sec.sectionBeats))
-				sec.sectionBeats = 4;
+			if(Math.isNaN(section.sectionBeats))
+				section.sectionBeats = 4;
 
-			var notes:Array<Dynamic> = cast sec.sectionNotes;
-			for(note in notes)
+			for(note in section.sectionNotes)
 			{
-				var gottaHitNote:Bool = (note[1] < 4) ? sec.mustHitSection : !sec.mustHitSection;
+				var gottaHitNote:Bool = (note[1] < 4) ? section.mustHitSection : !section.mustHitSection;
 				note[1] = (note[1] % 4) + (gottaHitNote ? 0 : 4);
 
-				if(note[3] != null && !Std.isOfType(note[3], String))
+				if(!Std.isOfType(note[3], String))
 					note[3] = Note.defaultNoteTypes[note[3]];
 			}
 		}
 	}
-
-	public static var chartPath:String;
-	public static var loadedSongName:String;
 
 	public static function loadFromJson(jsonInput:String, ?folder:String):SwagSong
 	{
@@ -124,18 +124,22 @@ class Song
 		PlayState.SONG = getChart(jsonInput, folder);
 		loadedSongName = folder;
 		chartPath = _lastPath;
+
 		#if windows
 		chartPath = chartPath.replace('/', '\\');
 		#end
+
 		StageData.loadDirectory(PlayState.SONG);
 		return PlayState.SONG;
 	}
 
 	static var _lastPath:String;
+
 	public static function getChart(jsonInput:String, ?folder:String):SwagSong
 	{
 		if(folder == null) folder = jsonInput;
 		var rawData:String = null;
+
 		var formattedFolder:String = Paths.formatToSongPath(folder);
 		var formattedSong:String = Paths.formatToSongPath(jsonInput);
 		_lastPath = Paths.json('$formattedFolder/$formattedSong');
@@ -153,6 +157,7 @@ class Song
 	public static function parseJSON(rawData:String, ?nameForError:String = null, ?convertTo:String = 'psych_v1'):SwagSong
 	{
 		var songJson:SwagSong = cast Json.parse(rawData);
+
 		if(Reflect.hasField(songJson, 'song'))
 		{
 			var subSong:SwagSong = Reflect.field(songJson, 'song');
@@ -179,11 +184,14 @@ class Song
 		return songJson;
 	}
 
-	// Section cache handling for large charts
+	// Section cache for large charts
 	public static function cacheSection(key:Int, section:SwagSection):Void
 	{
 		sectionCache.set(key, section);
-		var keys:Array<Int> = sectionCache.keys().toArray();
+
+		var keys:Array<Int> = [];
+		for(k in sectionCache.keys()) keys.push(k);
+
 		if(keys.length > MAX_CACHE)
 			sectionCache.remove(keys[0]);
 	}
