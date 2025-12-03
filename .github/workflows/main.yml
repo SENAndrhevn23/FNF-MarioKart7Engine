@@ -61,7 +61,7 @@ jobs:
         shell: cmd
 
       - name: Compile
-        run: haxelib run lime build windows --64bits --app-version="4.0.0-${{ github.run_id }}" -D officialBuild
+        run: haxelib run lime build windows --32bits --app-version="4.0.0-${{ github.run_id }}" -D officialBuild
         shell: cmd
 
       - name: Publish Artifact
