@@ -3,7 +3,6 @@ package backend;
 import haxe.Json;
 import lime.utils.Assets;
 import objects.Note;
-import sys.io.File;
 import haxe.ds.IntMap;
 
 typedef SwagSong =
@@ -28,20 +27,19 @@ typedef SwagSong =
 	@:optional var gameOverEnd:String;
 	
 	@:optional var disableNoteRGB:Bool;
+
 	@:optional var arrowSkin:String;
 	@:optional var splashSkin:String;
-
-	@:optional var sectionIndex:Array<Int>; // for lazy loading
 }
 
 typedef SwagSection =
 {
 	var sectionNotes:Array<Dynamic>;
-	var sectionBeats:Null<Float>;
+	var sectionBeats:Float;
 	var mustHitSection:Bool;
 	@:optional var altAnim:Bool;
 	@:optional var gfSection:Bool;
-	@:optional var bpm:Null<Float>;
+	@:optional var bpm:Float;
 	@:optional var changeBPM:Bool;
 }
 
@@ -66,17 +64,10 @@ class Song
 	public var gfVersion:String = 'gf';
 	public var format:String = 'psych_v1';
 
-	// ====================
-	// Static fields
-	public static var chartPath:String;
-	public static var loadedSongName:String;
-
-	// Section cache for lazy loading
+	// Section cache for large charts
 	static var sectionCache:IntMap<SwagSection> = new IntMap();
-	static var MAX_CACHE:Int = 20;
+	static var MAX_CACHE:Int = 1000;
 
-	// ====================
-	// Full chart conversion (old charts -> psych_v1)
 	public static function convert(songJson:Dynamic):Void
 	{
 		if(songJson.gfVersion == null)
@@ -88,34 +79,34 @@ class Song
 		if(songJson.events == null)
 		{
 			songJson.events = [];
-			for(secNum in 0...songJson.notes.length)
+			var sections:Array<SwagSection> = cast songJson.notes;
+			for(sec in sections)
 			{
-				var sec:SwagSection = songJson.notes[secNum];
 				var i:Int = 0;
-				var notes:Array<Dynamic> = sec.sectionNotes;
-				var len:Int = notes.length;
-				while(i < len)
+				var notes:Array<Dynamic> = cast sec.sectionNotes;
+				while(i < notes.length)
 				{
 					var note:Array<Dynamic> = notes[i];
 					if(note[1] < 0)
 					{
 						songJson.events.push([note[0], [[note[2], note[3], note[4]]]]);
 						notes.remove(note);
-						len = notes.length;
 					}
 					else i++;
 				}
 			}
 		}
 
-		for(section in songJson.notes)
+		var sections:Array<SwagSection> = cast songJson.notes;
+		for(sec in sections)
 		{
-			if(section.sectionBeats == null || Math.isNaN(section.sectionBeats))
-				section.sectionBeats = 4;
+			if(sec.sectionBeats == null || Math.isNaN(sec.sectionBeats))
+				sec.sectionBeats = 4;
 
-			for(note in section.sectionNotes)
+			var notes:Array<Dynamic> = cast sec.sectionNotes;
+			for(note in notes)
 			{
-				var gottaHitNote:Bool = (note[1] < 4) ? section.mustHitSection : !section.mustHitSection;
+				var gottaHitNote:Bool = (note[1] < 4) ? sec.mustHitSection : !sec.mustHitSection;
 				note[1] = (note[1] % 4) + (gottaHitNote ? 0 : 4);
 
 				if(note[3] != null && !Std.isOfType(note[3], String))
@@ -124,48 +115,41 @@ class Song
 		}
 	}
 
-	// ====================
-	// Load metadata only (lazy)
-	public static function parseJSONLazy(path:String):SwagSong
+	public static var chartPath:String;
+	public static var loadedSongName:String;
+
+	public static function loadFromJson(jsonInput:String, ?folder:String):SwagSong
 	{
-		var raw:String = File.getContent(path);
-		var songJson:SwagSong = cast Json.parse(raw);
-
-		if(songJson.notes != null)
-		{
-			songJson.sectionIndex = [];
-			for(i in 0...songJson.notes.length)
-				songJson.sectionIndex.push(i);
-			songJson.notes = null; // free memory
-		}
-
-		return songJson;
+		if(folder == null) folder = jsonInput;
+		PlayState.SONG = getChart(jsonInput, folder);
+		loadedSongName = folder;
+		chartPath = _lastPath;
+		#if windows
+		chartPath = chartPath.replace('/', '\\');
+		#end
+		StageData.loadDirectory(PlayState.SONG);
+		return PlayState.SONG;
 	}
 
-	// ====================
-	// Load a single section on demand
-	public static function loadSection(song:SwagSong, sectionNum:Int):SwagSection
+	static var _lastPath:String;
+	public static function getChart(jsonInput:String, ?folder:String):SwagSong
 	{
-		if(sectionCache.exists(sectionNum))
-			return sectionCache.get(sectionNum);
+		if(folder == null) folder = jsonInput;
+		var rawData:String = null;
+		var formattedFolder:String = Paths.formatToSongPath(folder);
+		var formattedSong:String = Paths.formatToSongPath(jsonInput);
+		_lastPath = Paths.json('$formattedFolder/$formattedSong');
 
-		var raw:String = File.getContent(chartPath);
-		var sections:Array<Dynamic> = Json.parse(raw).notes;
-		var sec:SwagSection = cast sections[sectionNum];
+		#if MODS_ALLOWED
+		if(FileSystem.exists(_lastPath))
+			rawData = File.getContent(_lastPath);
+		else
+		#end
+			rawData = Assets.getText(_lastPath);
 
-		if(song.notes == null) song.notes = [];
-		while(song.notes.length <= sectionNum) song.notes.push(null);
-		song.notes[sectionNum] = sec;
-
-		sectionCache.set(sectionNum, sec);
-		if(sectionCache.keys().iterator().hasNext() && sectionCache.keys().iterator().next() > MAX_CACHE)
-			sectionCache.remove(sectionCache.keys().iterator().next());
-
-		return sec;
+		return rawData != null ? parseJSON(rawData, jsonInput) : null;
 	}
 
-	// ====================
-	// Original parseJSON method (kept for compatibility)
 	public static function parseJSON(rawData:String, ?nameForError:String = null, ?convertTo:String = 'psych_v1'):SwagSong
 	{
 		var songJson:SwagSong = cast Json.parse(rawData);
@@ -195,27 +179,12 @@ class Song
 		return songJson;
 	}
 
-	// ====================
-	// Original getChart method (kept for compatibility)
-	public static function getChart(jsonInput:String, ?folder:String):SwagSong
+	// Section cache handling for large charts
+	public static function cacheSection(key:Int, section:SwagSection):Void
 	{
-		if(folder == null) folder = jsonInput;
-		var formattedFolder:String = Paths.formatToSongPath(folder);
-		var formattedSong:String = Paths.formatToSongPath(jsonInput);
-		chartPath = Paths.json('$formattedFolder/$formattedSong');
-
-		var rawData:String = File.getContent(chartPath);
-		return rawData != null ? parseJSON(rawData, jsonInput) : null;
-	}
-
-	// ====================
-	// Original loadFromJson (kept for compatibility)
-	public static function loadFromJson(jsonInput:String, ?folder:String):SwagSong
-	{
-		if(folder == null) folder = jsonInput;
-		PlayState.SONG = getChart(jsonInput, folder);
-		loadedSongName = folder;
-		StageData.loadDirectory(PlayState.SONG);
-		return PlayState.SONG;
+		sectionCache.set(key, section);
+		var keys:Array<Int> = sectionCache.keys().toArray();
+		if(keys.length > MAX_CACHE)
+			sectionCache.remove(keys[0]);
 	}
 }
