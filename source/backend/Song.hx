@@ -24,9 +24,8 @@ typedef SwagSong =
 	@:optional var gameOverSound:String;
 	@:optional var gameOverLoop:String;
 	@:optional var gameOverEnd:String;
-	
-	@:optional var disableNoteRGB:Bool;
 
+	@:optional var disableNoteRGB:Bool;
 	@:optional var arrowSkin:String;
 	@:optional var splashSkin:String;
 }
@@ -66,84 +65,78 @@ class Song
 	public static var chartPath:String;
 	public static var loadedSongName:String;
 
-	// Cache for large charts
-	public static var sectionCache:haxe.ds.IntMap<SwagSection> = new haxe.ds.IntMap();
-	public static var MAX_CACHE:Int = 1000;
-
+	// =========================
+	// Convert old charts to psych_v1 format
 	public static function convert(songJson:Dynamic):Void
 	{
-		if(songJson.gfVersion == null)
+		if(songJson.gfVersion == null && Reflect.hasField(songJson, 'player3'))
 		{
 			songJson.gfVersion = songJson.player3;
-			if(Reflect.hasField(songJson, 'player3')) Reflect.deleteField(songJson, 'player3');
+			Reflect.deleteField(songJson, 'player3');
 		}
 
 		if(songJson.events == null)
 		{
 			songJson.events = [];
-			for(secNum in 0...songJson.notes.length)
+			var sections:Array<SwagSection> = cast songJson.notes;
+			for(sec in sections)
 			{
-				var sec:SwagSection = cast songJson.notes[secNum];
-
-				var i:Int = 0;
-				var notes:Array<Dynamic> = sec.sectionNotes;
-				var len:Int = notes.length;
-				while(i < len)
+				var notes:Array<Dynamic> = cast sec.sectionNotes;
+				var i = 0;
+				while(i < notes.length)
 				{
 					var note:Array<Dynamic> = notes[i];
 					if(note[1] < 0)
 					{
 						songJson.events.push([note[0], [[note[2], note[3], note[4]]]]);
 						notes.remove(note);
-						len = notes.length;
 					}
 					else i++;
 				}
 			}
 		}
 
-		for(section in cast songJson.notes)
+		var sections:Array<SwagSection> = cast songJson.notes;
+		for(section in sections)
 		{
-			if(Math.isNaN(section.sectionBeats))
-				section.sectionBeats = 4;
+			if(Math.isNaN(section.sectionBeats)) section.sectionBeats = 4;
 
-			for(note in section.sectionNotes)
+			var notes:Array<Dynamic> = cast section.sectionNotes;
+			for(note in notes)
 			{
 				var gottaHitNote:Bool = (note[1] < 4) ? section.mustHitSection : !section.mustHitSection;
 				note[1] = (note[1] % 4) + (gottaHitNote ? 0 : 4);
 
-				if(!Std.isOfType(note[3], String))
+				if(note[3] != null && !Std.isOfType(note[3], String))
 					note[3] = Note.defaultNoteTypes[note[3]];
 			}
 		}
 	}
 
+	// =========================
 	public static function loadFromJson(jsonInput:String, ?folder:String):SwagSong
 	{
 		if(folder == null) folder = jsonInput;
 		PlayState.SONG = getChart(jsonInput, folder);
 		loadedSongName = folder;
 		chartPath = _lastPath;
-
 		#if windows
 		chartPath = chartPath.replace('/', '\\');
 		#end
-
 		StageData.loadDirectory(PlayState.SONG);
 		return PlayState.SONG;
 	}
 
+	// =========================
 	static var _lastPath:String;
-
 	public static function getChart(jsonInput:String, ?folder:String):SwagSong
 	{
 		if(folder == null) folder = jsonInput;
-		var rawData:String = null;
-
 		var formattedFolder:String = Paths.formatToSongPath(folder);
 		var formattedSong:String = Paths.formatToSongPath(jsonInput);
 		_lastPath = Paths.json('$formattedFolder/$formattedSong');
 
+		var rawData:String = null;
 		#if MODS_ALLOWED
 		if(FileSystem.exists(_lastPath))
 			rawData = File.getContent(_lastPath);
@@ -154,6 +147,7 @@ class Song
 		return rawData != null ? parseJSON(rawData, jsonInput) : null;
 	}
 
+	// =========================
 	public static function parseJSON(rawData:String, ?nameForError:String = null, ?convertTo:String = 'psych_v1'):SwagSong
 	{
 		var songJson:SwagSong = cast Json.parse(rawData);
@@ -170,29 +164,31 @@ class Song
 			var fmt:String = songJson.format;
 			if(fmt == null) fmt = songJson.format = 'unknown';
 
-			switch(convertTo)
+			if(!fmt.startsWith('psych_v1'))
 			{
-				case 'psych_v1':
-					if(!fmt.startsWith('psych_v1'))
-					{
-						trace('converting chart $nameForError with format $fmt to psych_v1 format...');
-						songJson.format = 'psych_v1_convert';
-						convert(songJson);
-					}
+				trace('converting chart $nameForError with format $fmt to psych_v1 format...');
+				songJson.format = 'psych_v1_convert';
+				convert(songJson);
 			}
 		}
+
 		return songJson;
 	}
 
-	// Section cache for large charts
-	public static function cacheSection(key:Int, section:SwagSection):Void
+	// =========================
+	// Optional: Cache handling for huge charts
+	public static inline var MAX_CACHE:Int = 256;
+	public static var sectionCache:haxe.ds.IntMap<SwagSection> = new haxe.ds.IntMap();
+
+	public static function addToCache(index:Int, section:SwagSection):Void
 	{
-		sectionCache.set(key, section);
-
-		var keys:Array<Int> = [];
-		for(k in sectionCache.keys()) keys.push(k);
-
-		if(keys.length > MAX_CACHE)
-			sectionCache.remove(keys[0]);
+		if(sectionCache.keys().iterator().hasNext())
+		{
+			var keys:Array<Int> = [];
+			for(k in sectionCache.keys()) keys.push(k);
+			if(keys.length > MAX_CACHE)
+				sectionCache.remove(keys[0]);
+		}
+		sectionCache.set(index, section);
 	}
 }
