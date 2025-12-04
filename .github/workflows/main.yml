@@ -1,4 +1,4 @@
-name: Build
+name: Build and Release
 
 on:
   push:
@@ -10,6 +10,8 @@ on:
 jobs:
   buildLinux:
     runs-on: ubuntu-latest
+    outputs:
+      artifact_path: ${{ steps.upload.outputs.artifact-path }}
     steps:
       - uses: actions/checkout@v4.1.7
 
@@ -20,9 +22,9 @@ jobs:
       - name: Install Haxelib & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install libvlc-dev libvlccore-dev
+          sudo apt-get install -y libvlc-dev libvlccore-dev zip
           haxelib setup ~/haxelib
-          haxelib install hxcpp > /dev/null --quiet
+          haxelib install hxcpp --always
           chmod +x ./setup/unix.sh
           sh ./setup/unix.sh
 
@@ -30,16 +32,20 @@ jobs:
         run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
 
       - name: Create Version Tag
-        run: echo "${{ github.run_id }}" > VERSION
+        run: echo "v0.0.1" > VERSION
 
       - name: Compile
-        run: haxelib run lime build linux -D hxcpp_64bit --app-version="4.0.0-${{ github.run_id}}" -D officialBuild
+        run: haxelib run lime build linux -D hxcpp_64bit --app-version="0.0.1" -D officialBuild
 
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4.3.4
+      - name: Zip Linux Build
+        run: zip -r Linux_MarioKart7Engine_v0.0.1.zip export/release/linux/bin
+
+      - name: Upload Artifact
+        id: upload
+        uses: actions/upload-artifact@v4
         with:
           name: linuxBuild
-          path: export/release/linux/bin
+          path: Linux_MarioKart7Engine_v0.0.1.zip
 
   buildWindows:
     runs-on: windows-latest
@@ -53,7 +59,7 @@ jobs:
       - name: Install Haxelib
         run: |
           haxelib setup C:/haxelib
-          haxelib install hxcpp > /dev/null --quiet
+          haxelib install hxcpp --always
           .\"setup/windows.bat"
         shell: cmd
 
@@ -62,16 +68,19 @@ jobs:
         shell: cmd
 
       - name: Create Version Tag
-        run: echo "${{ github.run_id }}" > VERSION
+        run: echo "v0.0.1" > VERSION
 
       - name: Compile
-        run: haxelib run lime build windows -D hxcpp_64bit --app-version="4.0.0-${{ github.run_id}}" -D officialBuild
+        run: haxelib run lime build windows -D hxcpp_64bit --app-version="0.0.1" -D officialBuild
 
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4.3.4
+      - name: Zip Windows Build
+        run: powershell Compress-Archive -Path export/release/windows/bin/* -DestinationPath Windows_MarioKart7Engine_v0.0.1.zip
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: windowsBuild
-          path: export/release/windows/bin
+          path: Windows_MarioKart7Engine_v0.0.1.zip
 
   buildMac:
     runs-on: macos-15
@@ -85,7 +94,7 @@ jobs:
       - name: Install Haxelib & Dependencies
         run: |
           haxelib setup ~/haxelib
-          haxelib install hxcpp > /dev/null --quiet
+          haxelib install hxcpp --always
           chmod +x ./setup/unix.sh
           sh ./setup/unix.sh
 
@@ -93,13 +102,70 @@ jobs:
         run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
 
       - name: Create Version Tag
-        run: echo "${{ github.run_id }}" > VERSION
+        run: echo "v0.0.1" > VERSION
 
       - name: Compile
-        run: haxelib run lime build mac -D hxcpp_64bit --app-version="4.0.0-${{ github.run_id}}" -D officialBuild
+        run: haxelib run lime build mac -D hxcpp_64bit --app-version="0.0.1" -D officialBuild
 
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4.3.4
+      - name: Zip Mac Build
+        run: zip -r Mac_MarioKart7Engine_v0.0.1.zip export/release/macos/bin
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: macBuild
-          path: export/release/macos/bin
+          path: Mac_MarioKart7Engine_v0.0.1.zip
+
+  release:
+    needs: [buildLinux, buildWindows, buildMac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux Build
+        uses: actions/download-artifact@v4
+        with:
+          name: linuxBuild
+          path: release/linux
+
+      - name: Download Windows Build
+        uses: actions/download-artifact@v4
+        with:
+          name: windowsBuild
+          path: release/windows
+
+      - name: Download Mac Build
+        uses: actions/download-artifact@v4
+        with:
+          name: macBuild
+          path: release/mac
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "v0.0.1"
+          name: "Mario Kart 7 Engine V0.0.1"
+          body: "Initial release of Mario Kart 7 Engine"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux Build
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/linux/Linux_MarioKart7Engine_v0.0.1.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows Build
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/windows/Windows_MarioKart7Engine_v0.0.1.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Mac Build
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/mac/Mac_MarioKart7Engine_v0.0.1.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
