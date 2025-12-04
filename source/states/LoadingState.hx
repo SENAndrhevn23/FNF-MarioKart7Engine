@@ -657,55 +657,69 @@ class LoadingState extends MusicBeatState
 		}
 	}
 
-	public static function startThreads()
-	{
-		mutex = new Mutex();
-		loadMax = imagesToPrepare.length + soundsToPrepare.length + musicToPrepare.length + songsToPrepare.length;
-		loaded = 0;
+public static function startThreads()
+{
+    mutex = new Mutex();
 
-		//then start threads
-		_threadFunc();
-	}
+    // Make sure invalid assets are cleared before setting loadMax
+    clearInvalids();
 
-	static function _threadFunc()
-	{
-		_startPool();
-		for (sound in soundsToPrepare) initThread(() -> preloadSound('sounds/$sound'), 'sound $sound');
-		for (music in musicToPrepare) initThread(() -> preloadSound('music/$music'), 'music $music');
-		for (song in songsToPrepare) initThread(() -> preloadSound(song, 'songs', true, false), 'song $song');
+    loadMax = imagesToPrepare.length + soundsToPrepare.length + musicToPrepare.length + songsToPrepare.length;
+    loaded = 0;
 
-		// for images, they get to have their own thread
-		for (image in imagesToPrepare) initThread(() -> preloadGraphic(image), 'image $image');
-	}
+    // if nothing to load, mark as done immediately
+    if(loadMax == 0) {
+        loaded = loadMax;
+        initialThreadCompleted = true;
+        return;
+    }
 
-	static function initThread(func:Void->Dynamic, traceData:String)
-	{
-		// trace('scheduled $func in threadPool');
-		#if debug
-		var threadSchedule = Sys.time();
-		#end
-		threadPool.run(() -> {
-			#if debug
-			var threadStart = Sys.time();
-			trace('$traceData took ${threadStart - threadSchedule}s to start preloading');
-			#end
+    _threadFunc();
+}
 
-			try {
-				if (func() != null) {
-					#if debug
-					var diff = Sys.time() - threadStart;
-					trace('finished preloading $traceData in ${diff}s');
-					#end
-				} else trace('ERROR! fail on preloading $traceData ');
-			}
-			catch(e:Dynamic) {
-				trace('ERROR! fail on preloading $traceData: $e');
-			}
-			// mutex.acquire();
-			loaded++;
-			// mutex.release();
-		});
-	}
+static function _threadFunc()
+{
+    _startPool();
+
+    for (sound in soundsToPrepare) initThread(() -> preloadSound('sounds/$sound'), 'sound $sound');
+    for (music in musicToPrepare) initThread(() -> preloadSound('music/$music'), 'music $music');
+    for (song in songsToPrepare) initThread(() -> preloadSound(song, 'songs', true, false), 'song $song');
+
+    for (image in imagesToPrepare) initThread(() -> preloadGraphic(image), 'image $image');
+}
+
+static function initThread(func:Void->Dynamic, traceData:String)
+{
+    #if debug
+    var threadSchedule = Sys.time();
+    #end
+
+    threadPool.run(() -> {
+        #if debug
+        var threadStart = Sys.time();
+        trace('$traceData scheduled after ${threadStart - threadSchedule}s');
+        #end
+
+        try {
+            func(); // attempt to load resource
+        }
+        catch(e:Dynamic) {
+            trace('ERROR! failed preloading $traceData: $e');
+        }
+        finally {
+            // always increment loaded, even if func() failed
+            mutex.acquire();
+            loaded++;
+            mutex.release();
+        }
+
+        #if debug
+        var diff = Sys.time() - threadStart;
+        trace('finished $traceData in ${diff}s, loaded=$loaded/$loadMax');
+        #end
+    });
+}
+
 
 	inline private static function preloadCharacter(char:String, ?prefixVocals:String)
 	{
