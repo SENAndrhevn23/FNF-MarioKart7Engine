@@ -7,6 +7,9 @@ on:
     branches: [ main, experimental ]
   workflow_dispatch:
 
+permissions:
+  contents: write  # Required to push tags and create releases
+
 jobs:
   buildLinux:
     runs-on: ubuntu-latest
@@ -31,17 +34,16 @@ jobs:
       - name: Skip SScript setup mode
         run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
 
-      - name: Create Version Tag
+      - name: Create Version File
         run: echo "v0.0.1" > VERSION
 
-      - name: Compile
+      - name: Compile Linux Build
         run: haxelib run lime build linux -D hxcpp_64bit --app-version="0.0.1" -D officialBuild
 
       - name: Zip Linux Build
         run: zip -r Linux_MarioKart7Engine_v0.0.1.zip export/release/linux/bin
 
-      - name: Upload Artifact
-        id: upload
+      - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linuxBuild
@@ -67,16 +69,16 @@ jobs:
         run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> %USERPROFILE%/settings.cocoa
         shell: cmd
 
-      - name: Create Version Tag
+      - name: Create Version File
         run: echo "v0.0.1" > VERSION
 
-      - name: Compile
+      - name: Compile Windows Build
         run: haxelib run lime build windows -D hxcpp_64bit --app-version="0.0.1" -D officialBuild
 
       - name: Zip Windows Build
         run: powershell Compress-Archive -Path export/release/windows/bin/* -DestinationPath Windows_MarioKart7Engine_v0.0.1.zip
 
-      - name: Upload Artifact
+      - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windowsBuild
@@ -101,16 +103,16 @@ jobs:
       - name: Skip SScript setup mode
         run: echo 'oy9:showMacroty8:loopCosti25y10:includeAllfg' >> ~/settings.cocoa
 
-      - name: Create Version Tag
+      - name: Create Version File
         run: echo "v0.0.1" > VERSION
 
-      - name: Compile
+      - name: Compile Mac Build
         run: haxelib run lime build mac -D hxcpp_64bit --app-version="0.0.1" -D officialBuild
 
       - name: Zip Mac Build
         run: zip -r Mac_MarioKart7Engine_v0.0.1.zip export/release/macos/bin
 
-      - name: Upload Artifact
+      - name: Upload Mac Artifact
         uses: actions/upload-artifact@v4
         with:
           name: macBuild
@@ -122,6 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Download the zipped builds
       - name: Download Linux Build
         uses: actions/download-artifact@v4
         with:
@@ -140,6 +143,15 @@ jobs:
           name: macBuild
           path: release/mac
 
+      # Ensure the tag exists in GitHub
+      - name: Create and Push Git Tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -a v0.0.1 -m "Mario Kart 7 Engine V0.0.1" || echo "Tag already exists"
+          git push origin v0.0.1 || echo "Tag already pushed"
+
+      # Create GitHub Release and attach builds
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
